@@ -120,7 +120,7 @@
     
     {% if warning_message %}
     <div style="background-color: #ffcccc; color: #b30000; padding: 10px; border: 1px solid #b30000; margin-bottom: 20px;">
-    {{ warning_message }}
+        {{ warning_message }}
     </div>
     {% endif %}
 
@@ -135,24 +135,20 @@
 
     <!-- Actions Container -->
     <div class="actions-container">
-        <!-- Add Group -->
         <form action="/add_group" method="post">
             <input type="text" name="group_name" placeholder="Enter new group name" required>
             <button type="submit" class="create">Create Group</button>
         </form>
 
-        <!-- Edit Group -->
         <form action="/edit_group/{{ selected_group }}" method="post">
             <input type="text" name="new_group_name" placeholder="Enter new group name" required>
             <button type="submit" class="edit">Edit Group Name</button>
         </form>
 
-        <!-- Delete Group -->
         <form action="/delete_group/{{ selected_group }}" method="post" onsubmit="return confirm('Are you sure you want to delete this group? This will delete all stocks in the group.')">
             <button type="submit" class="delete">Delete Group</button>
         </form>
 
-        <!-- Add Stock -->
         <form action="/add_stock" method="post">
             <input type="text" name="ticker" placeholder="Enter stock ticker (e.g., RELIANCE.NS)" required>
             <input type="text" name="note" placeholder="Enter a note for the stock" required>
@@ -172,6 +168,8 @@
                 <th>Volume</th>
                 <th>Note</th>
                 <th>Other Groups</th>
+                <th>Added Price</th>
+                <th>Percent Change</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -193,10 +191,21 @@
                     {% endif %}
                 </td>
                 <td>
-                    <!-- Edit Note Button -->
+                    {% if stock.added_price %}
+                        {{ "%.2f" | format(stock.added_price) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if stock.percent_change != 'N/A' %}
+                        {{ "%.2f" | format(stock.percent_change) }}%
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
                     <button class="edit-btn" onclick="openModal('{{ stock.id }}', '{{ stock.note }}')">Edit</button>
-
-                    <!-- Delete Stock Button -->
                     <form action="/delete_stock/{{ stock.id }}" method="post" style="display: inline;">
                         <button type="submit" style="background-color: #dc3545; color: white;">Delete</button>
                     </form>
@@ -227,12 +236,8 @@
             const form = document.getElementById('editNoteForm');
             const noteInput = document.getElementById('noteInput');
 
-            // Set the action for the form
             form.action = `/edit_note/${stockId}`;
-            // Pre-fill the note input
             noteInput.value = note;
-
-            // Show the modal
             modal.style.display = 'block';
         }
 
@@ -241,7 +246,6 @@
             modal.style.display = 'none';
         }
 
-        // Close the modal if the user clicks outside of it
         window.onclick = function(event) {
             const modal = document.getElementById('editNoteModal');
             if (event.target === modal) {

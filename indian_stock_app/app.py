@@ -65,7 +65,7 @@ def group(group_name):
 
         # Fetch stocks for the selected group
         cursor.execute('''
-            SELECT stocks.id, stocks.ticker, stocks.note
+            SELECT stocks.id, stocks.ticker, stocks.note, stocks.added_price
             FROM stocks
             JOIN groups ON stocks.group_id = groups.id
             WHERE groups.name = ?
@@ -76,12 +76,19 @@ def group(group_name):
         tickers = [stock[1] for stock in stocks]
         stock_data = fetch_stock_data(tickers)
 
-        # Combine stock data with notes and group information
+        # Combine stock data with notes, added price, and calculate percentage change
         for stock in stock_data:
             for db_stock in stocks:
                 if db_stock[1] == stock['ticker']:
                     stock['id'] = db_stock[0]
                     stock['note'] = db_stock[2]
+                    stock['added_price'] = db_stock[3]
+
+                    # Calculate percentage change
+                    if stock['price'] != 'N/A' and db_stock[3] is not None:
+                        stock['percent_change'] = ((stock['price'] - db_stock[3]) / db_stock[3]) * 100
+                    else:
+                        stock['percent_change'] = 'N/A'
 
                     # Fetch other groups where this stock exists
                     cursor.execute('''
@@ -92,7 +99,13 @@ def group(group_name):
                     ''', (stock['ticker'], group_name))
                     stock['other_groups'] = [row[0] for row in cursor.fetchall()]
 
-    return render_template('group.html', groups=groups, stocks=stock_data, selected_group=group_name, warning_message=warning_message)
+    return render_template(
+        'group.html',
+        groups=groups,
+        stocks=stock_data,
+        selected_group=group_name,
+        warning_message=warning_message
+    )
 
 @app.route('/add_stock', methods=['POST'])
 def add_stock():
@@ -102,6 +115,14 @@ def add_stock():
 
     with sqlite3.connect('stocks.db') as conn:
         cursor = conn.cursor()
+
+        # Fetch current stock price using Yahoo Finance
+        try:
+            stock = yf.Ticker(ticker)
+            added_price = stock.info.get('currentPrice', stock.info.get('regularMarketPrice', None))
+        except Exception as e:
+            print(f"Error fetching price for {ticker}: {e}")
+            added_price = None  # Handle cases where price isn't available
 
         # Check if the stock is already in another group
         cursor.execute('''
@@ -119,25 +140,25 @@ def add_stock():
             if other_groups:
                 warning_message = f"Stock '{ticker}' is already present in the following group(s): {', '.join(other_groups)}"
 
-        # Get the group_id for the current group
+        # Get the group_id for the selected group
         cursor.execute('SELECT id FROM groups WHERE name = ?', (group_name,))
         group_id = cursor.fetchone()
         if not group_id:
             return redirect(url_for('group', group_name='Default'))  # Safety fallback
         group_id = group_id[0]
 
-        # Insert the stock into the current group
+        # Insert the stock into the database with the current price
         try:
             cursor.execute(
-                'INSERT INTO stocks (ticker, note, group_id) VALUES (?, ?, ?)',
-                (ticker, note, group_id)
+                'INSERT INTO stocks (ticker, note, group_id, added_price) VALUES (?, ?, ?, ?)',
+                (ticker, note, group_id, added_price)
             )
             conn.commit()
         except sqlite3.IntegrityError:
             pass  # Ignore duplicates in the same group
 
-    # Store the warning in the session and redirect back to the group page
-    return redirect(url_for('group', group_name=group_name) + f"?warning={warning_message}")
+    # Redirect back to the group page and display the warning message
+    return redirect(url_for('group', group_name=group_name) + (f"?warning={warning_message}" if warning_message else ""))
 
 @app.route('/add_group', methods=['POST'])
 def add_group():
